@@ -1,0 +1,24 @@
+# -*- coding: utf-8 -*-
+#
+# Copyright (C) 2021 CESNET.
+#
+# OARepo-tokens is free software; you can redistribute it and/or modify
+# it under the terms of the MIT License; see LICENSE file for more details.
+
+# TODO: Generate this manifest file by running the following commands:
+# (please sort the lines in this file after running below commands)
+#
+#  git init
+#  git add -A
+#  pip install -e .[all]
+#  check-manifest -u
+
+include LICENSE
+include *.py
+include pytest.ini
+include *.rst
+include scripts/bootstrap
+include scripts/init
+include *.sh
+recursive-include .github/workflows *.yml
+recursive-include tests *.py
