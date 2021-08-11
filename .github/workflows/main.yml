@@ -1,4 +1,4 @@
-name: Test python
+name: OARepo-S3-CLI build,test,deploy
 
 on: [ push, workflow_dispatch ]
 
