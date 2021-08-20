@@ -9,5 +9,8 @@ Changes
 =======
 
 Version 0.1.0 (released TBD)
+ - Initial public release.
 
-- Initial public release.
+Version 0.1.1
+ - noninteractive mode added, resume call moved
+
