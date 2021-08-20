@@ -70,16 +70,11 @@ class OARepoS3Client(object):
             if st == STATUS_OK:
                 logger.debug(f"{funcname()} parts:\n{self.parts}")
                 location = self.complete_upload()
-                return location
+                return location, STATUS_OK
             else:
                 raise Exception(f"Upload failed with status {st}.", st)
         except Exception as e:
             logger.debug(f"{funcname()} caught and raising Exception \"{e}\" {procname()}")
-            if click.confirm(f"\ncall abort_upload? (resume will not be possible)"):
-                self.abort_upload()
-            else:
-                secho(f'abort_upload skipped.\n resume info:')
-                secho(f'   -f "{self.file}" -k "{self.key}" -u "{self.uploadId}"')
             raise e
 
     def check_token_status(self, token):
@@ -96,6 +91,10 @@ class OARepoS3Client(object):
     def set_uploadId(self, uploadId):
         self.uploadId = uploadId
         self.urlUpload = f"{self.urlFiles}{self.key}/{self.uploadId}"
+
+
+    def get_uploadId(self):
+        return self.uploadId
 
 
     def set_file(self, file=None):

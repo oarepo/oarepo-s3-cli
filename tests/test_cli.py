@@ -131,5 +131,5 @@ def test_upload(
     print(result.stderr)
     assert result.exit_code == 0
     # assert result.output == ''
-    assert re.match(f"^.*\nOK: Done\\. \\[https://.*/{key}]\n$", result.output, re.MULTILINE|re.DOTALL)
+    assert re.match(f"^.*\nOK: Finished upload.*\\[https://.*/{key}]\n$", result.output, re.MULTILINE|re.DOTALL)
 

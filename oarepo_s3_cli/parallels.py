@@ -147,8 +147,7 @@ class Parallels():
             try:
                 j, res = fut.get(FORCED_GET_TIMEOUT)
                 stats.finish()
-                if partNum != j:
-                    logger.debug(f"!!!!!!!!!!!!!!!!!!! parNum!=j ({partNum}!={j})")
+                assert partNum == j
                 results[partNum-1] = res
                 logger.debug(f"OK: #{partNum} get: {res}({type(res) if isinstance(res, Exception) else ''})")
             except mp.context.TimeoutError as e:
