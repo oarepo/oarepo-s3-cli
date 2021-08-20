@@ -77,11 +77,14 @@ class Stats(object):
         self.failed = 0
         self.for_terminate = 0
 
-    def decr(self, i=1):
-        if self.pending == 0:
-            self.running -= i
+    def decr(self):
+        if self.pending > 0:
+            self.pending -= 1
+        elif self.running > 0:
+            self.running -= 1
         else:
-            self.pending -= i
+            str = f"{self.pending}/{self.running}/{self.finished}/{self.failed}"
+            raise Exception(f"Cannot decrementing ({str})", STATUS_GENERAL_ERROR)
 
     def start(self, i=1):
         self.pending -= i

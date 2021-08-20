@@ -54,9 +54,9 @@ class OARepoS3Client(object):
         return self.do_upload()
 
     def do_upload(self):
-        for i in range(1, self.num_parts+1):
-            if self.results[i-1] is None:
-                self.parts_unfin.append(i)
+        for partNum in range(1, self.num_parts+1):
+            if self.results[partNum-1] is None:
+                self.parts_unfin.append(partNum)
         logger.debug(f"{funcname()} parts_unfin:\n{self.parts_unfin}")
         try:
             # parts_unfin = range(1, self.num_parts + 1)

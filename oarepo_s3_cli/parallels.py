@@ -75,7 +75,8 @@ class Parallels():
 
     def main(self):
         stats = Stats(self.num_parts, self.num_parts-len(self.parts_unfin))
-        futs, results = [], [None for i in range(self.num_parts)]
+        futs = [None for i in range(self.num_parts)]
+        results = [None for i in range(self.num_parts)]
         # --- handlers: ---
         def ok_cb(res):
             logger.debug(f'\nCB:{procname()} {res}')
@@ -99,8 +100,9 @@ class Parallels():
             pool = mp.Pool(self.pool_size)
             logger.debug(f'main: Start {self.pool_size} parallel uploads of {self.num_parts} parts')
             for partNum in self.parts_unfin:
-                futs.append(pool.apply_async(self.worker_wrapper, args=(partNum, f"val-{partNum}",),
-                                             callback=ok_cb, error_callback=err_cb))
+                futs[partNum-1] = pool.apply_async(
+                    self.worker_wrapper, args=(partNum, f"val-{partNum}",),
+                    callback=ok_cb, error_callback=err_cb)
                 # stats.start()
             stats.start(self.pool_size)
         except Exception as e:
@@ -119,7 +121,9 @@ class Parallels():
             while True:
                 secs = round(time.time() - start)
                 self.output(stats, spinner.get(), secs)
-                if self.killed: break
+                if self.killed:
+                    pool.terminate()
+                    break
                 if stats.remaining == 0: break
                 if secs > self.mon_timeout:
                     # if click.confirm(f"\nTimeout ({MON_TIMEOUT}s) reached - double timeout (to {MON_TIMEOUT*2}s) and continue?"):
@@ -135,20 +139,25 @@ class Parallels():
 
         # --- scan results from futures: ---
         for i in range(len(futs)):
-            partNum, fut = i + 1, futs[i]
-            if results[i] is not None: continue
+            partNum, fut, res = i + 1, futs[i], results[i]
+            logger.debug(f' scan #{partNum} res:{res}; fut {fut}')
+            if res is not None: continue
+            if fut is None: continue
             logger.debug(f'final waiting for fut {partNum}: ')
             try:
-                results[i] = fut.get(FORCED_GET_TIMEOUT)
+                j, res = fut.get(FORCED_GET_TIMEOUT)
                 stats.finish()
-                r = results[i]
-                logger.debug(f"OK: #{partNum} get: {r}({type(r) if isinstance(r, Exception) else ''})")
+                if partNum != j:
+                    logger.debug(f"!!!!!!!!!!!!!!!!!!! parNum!=j ({partNum}!={j})")
+                results[partNum-1] = res
+                logger.debug(f"OK: #{partNum} get: {res}({type(res) if isinstance(res, Exception) else ''})")
             except mp.context.TimeoutError as e:
-                logger.error(f'\nERR: #{partNum} upload failed')
+                logger.error(f'\nERR: #{partNum} upload failed (e.args:{e.args})')
                 stats.terminate()
             except Exception as e:
-                logger.debug(f'\nERR: #{partNum} result is Exception {e}')
+                logger.debug(f'\nERR: #{partNum} result is Exception {e} (e.args:{e.args})')
                 results[i] = e
+                # stats.fail()
         self.output(stats, spinner.get(), secs)
 
         logger.debug(f"\n{'-' * 3} scan cycle ended {'-' * 3}")
