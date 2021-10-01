@@ -10,6 +10,7 @@
 import hashlib, re
 from os import path
 import time, requests, json, logging
+from urllib3.exceptions import NewConnectionError
 from oarepo_s3_cli.utils import *
 from oarepo_s3_cli.constants import *
 from oarepo_s3_cli.parallels import Parallels
@@ -300,8 +301,7 @@ class OARepoS3Client(object):
                     logger.debug(f"...#{partNum} ETag: {ETag}")
                     ok = True
                     break
-            # except (NewConnectionError, ConnectionError) as e:
-            except (ConnectionError) as e:
+            except (NewConnectionError, ConnectionError, socket.gaierror) as e:
                 msg = f"Error uploading part #{partNum} retry {retry} from {MAX_RETRIES}"
                 secho(f"{msg}", prefix='\nWARN', fg='yellow', quiet=self.quiet)
                 logger.debug(f"  #{partNum} Error [{e}]")

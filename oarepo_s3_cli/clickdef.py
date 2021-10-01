@@ -11,6 +11,7 @@ import sys
 import click
 import logging
 import urllib3
+import requests
 from oarepo_s3_cli.utils import *
 from oarepo_s3_cli.lib import OARepoS3Client
 from oarepo_s3_cli.constants import *
@@ -58,7 +59,8 @@ def cli_upload(ctx, files, keys, parallel):
         try:
             oas3 = OARepoS3Client(co['endpoint'], co['token'], parallel, co['quiet'])
             location, code = oas3.process_click_upload(key, file)
-        except (FileNotFoundError, PermissionError) as e:
+        except (FileNotFoundError, PermissionError,
+                requests.exceptions.ConnectionError, urllib3.exceptions.NewConnectionError) as e:
             msg, code = e.args if len(e.args) > 1 else (e.args[0], STATUS_UNKNOWN)
             err_fatal(msg, code)
         except Exception as e:
