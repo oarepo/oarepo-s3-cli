@@ -14,3 +14,10 @@ Version 0.1.0 (released TBD)
 Version 0.1.1
  - noninteractive mode added, resume call moved
 
+Version 0.1.2
+ - setuptools ver.limited
+ - README.md
+ - check command impl.
+ - revoke command impl.
+ - error messages changed
+
