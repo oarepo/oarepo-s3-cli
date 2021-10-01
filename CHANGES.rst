@@ -21,3 +21,7 @@ Version 0.1.2
  - revoke command impl.
  - error messages changed
 
+Version 0.1.3
+ - CLI entry point added
+ - exception handling changed
+
