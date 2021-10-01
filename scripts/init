@@ -8,8 +8,8 @@
 
 set -e
 
-EXTRAS=tests
+EXTRAS=${1:-tests}
 
-pip install --upgrade pip setuptools py pip-tools
+pip install --upgrade pip 'setuptools<58.0.0' py pip-tools
 pip install requirements-builder
 requirements-builder -e ${EXTRAS} setup.py | pip-compile -U -o .requirements.txt -

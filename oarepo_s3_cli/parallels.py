@@ -26,19 +26,21 @@ class Parallels():
         self.pn = None
         self.quiet = quiet
 
-    def signal_handler(self, signumner, stack_frame):
-        signame = get_signame(signumner)
+    def signal_handler(self, signumber, stack_frame):
+        signame = get_signame(signumber)
         logger.debug(
             f"\n{procname()} pn:{self.pn}: \
-            Caught signal \"{signame}\" ({signumner})")
+            Caught signal \"{signame}\" ({signumber})")
         # if mp.current_process().name == 'MainProcess' and not self.killed:
         if mp.current_process().name == 'MainProcess':
+            secho(f"\nKeyboard interrupt, waiting for child processes ... ", quiet=self.quiet)
             if not self.killed: self.killed = True
             else:
                 logger.debug(f"\n{procname()}: exit")
                 sys.exit(STATUS_KILLED)
         else:
-            raise SignalException(self.pn, f'Signal "{signame}"({signumner})')
+            raise SignalException(self.pn, (f'Signal "{signame}"({signumber})', signumber))
+            # raise SignalException(self.pn, f'Signal "{signame}"({signumber})')
 
     def output(self, stats, spinchar, elapsed, barchar='#'):
         elapsed_f = str(timedelta(seconds=elapsed))
@@ -151,7 +153,7 @@ class Parallels():
                 results[partNum-1] = res
                 logger.debug(f"OK: #{partNum} get: {res}({type(res) if isinstance(res, Exception) else ''})")
             except mp.context.TimeoutError as e:
-                logger.error(f'\nERR: #{partNum} upload failed (e.args:{e.args})')
+                logger.debug(f'\nERR: #{partNum} upload failed (e.args:{e.args})')
                 stats.terminate()
             except Exception as e:
                 logger.debug(f'\nERR: #{partNum} result is Exception {e} (e.args:{e.args})')

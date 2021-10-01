@@ -7,6 +7,7 @@
 
 """ OARepo S3 client lib. """
 
+import hashlib, re
 from os import path
 import time, requests, json, logging
 from oarepo_s3_cli.utils import *
@@ -26,6 +27,8 @@ class OARepoS3Client(object):
     """ """
     def __init__(self, url, token, parallel=1, quiet=False, key=None):
         self.url = url
+        # don't use certificates on localhost:
+        self.https_verify = not re.match(f"^https://127\\.0\\.0\\.1:", url)
         self.token = token
         self.parallel = MAX_PARALLEL if parallel == 0 else parallel
         self.quiet = quiet
@@ -35,14 +38,12 @@ class OARepoS3Client(object):
         self.urlFiles = self.check_token_status(self.token)
 
     def process_click_upload(self, key=None, file=None):
-        self.key = key if not (key is None or key=='') else path.basename(file)
-        self.set_file(file)
+        self.set_file(file, key)
         self.init_upload()
         return self.do_upload()
 
     def process_click_resume(self, key, file, uploadId):
-        self.key = key
-        self.set_file(file)
+        self.set_file(file, key)
         self.set_uploadId(uploadId)
         # parts = self.get_parts()
         self.scan_parts()
@@ -77,15 +78,45 @@ class OARepoS3Client(object):
             logger.debug(f"{funcname()} caught and raising Exception \"{e}\" {procname()}")
             raise e
 
+    def process_click_check(self, key, file):
+        self.set_file(file, key, showInfo=False)
+        msg = f"Checking file uploaded as key {self.key} with local file {file} ..."
+        secho(f"{msg}", quiet=self.quiet)
+        chunk_size = MIN_PART_SIZE
+        hashalg = hashlib.sha256()
+        with open(file, "rb") as f:
+            while 1:
+                chunk = f.read(chunk_size)
+                if not chunk: break
+                hashalg.update(chunk)
+        # local_hash = hashlib.sha256(bytes).hexdigest()
+        local_hash = hashalg.hexdigest()
+        urlFile = f"{self.urlFiles}{self.key}"
+        headers = { 'Authorization': f"Bearer {self.token}" }
+        resp = requests.get(urlFile, headers=headers, verify=self.https_verify)
+        if resp.status_code >= 400:
+            raise Exception(f"Can't read remote file.", STATUS_GENERAL_ERROR)
+        hashalg = hashlib.sha256()
+        for data in resp.iter_content(chunk_size):
+            hashalg.update(data)
+        remote_hash = hashalg.hexdigest()
+        logger.debug(f"\n local sha256 hash: {local_hash}\nremote sha256 hash: {remote_hash}")
+        if local_hash==remote_hash:
+            secho(f"Local and remote files have the same sha256 hash.",
+                prefix='OK', quiet=self.quiet)
+            return True, STATUS_OK
+        # return False, STATUS_GENERAL_ERROR
+        raise Exception(f"Local and remote files differ.", STATUS_GENERAL_ERROR)
+
     def check_token_status(self, token):
         token_status_url = f"{self.url}/access-tokens/status"
         headers = { 'Authorization': f"Bearer {token}" }
-        resp = requests.get(token_status_url, headers=headers, verify=False)
+        resp = requests.get(token_status_url, headers=headers, verify=self.https_verify)
         if resp.status_code != 200:
-            raise Exception(f"Invalid token (http code {resp.status_code})", STATUS_INVALID_TOKEN)
+            raise PermissionError(f"Invalid token (http code {resp.status_code})", STATUS_INVALID_TOKEN)
         resp_json = resp.json()
         if resp_json['status'] != 'OK':
-            raise Exception(f"Expired token", STATUS_EXPIRED_TOKEN)
+            raise PermissionError(f"Expired token", STATUS_EXPIRED_TOKEN)
         return resp_json['links']['files']
 
     def set_uploadId(self, uploadId):
@@ -97,20 +128,22 @@ class OARepoS3Client(object):
         return self.uploadId
 
 
-    def set_file(self, file=None):
+    def set_file(self, file=None, key=None, showInfo=True):
         if file is None or not path.exists(file) or not path.isfile(file):
-            raise Exception(f"File not found ({file})", STATUS_WRONG_FILE)
+            raise FileNotFoundError(f"File not found ({file})", STATUS_WRONG_FILE)
         if not os.access(file, os.R_OK):
-            raise Exception(f"File not readable ({file})", STATUS_WRONG_FILE)
+            raise PermissionError(f"File not readable ({file})", STATUS_WRONG_FILE)
         self.file = file
+        self.key = key if not (key is None or key=='') else path.basename(file)
         self.data_size = path.getsize(file)
         self.num_parts, self.part_size, self.last_size = get_file_chunk_size(self.data_size)
         self.results = [None for i in range(self.num_parts)]
-        msg = f"Uploading file {file} {'' if self.key=='' else f'as key {self.key}'}\n" \
-            f"    in {self.num_parts} part(s)" \
-            f" using up to {self.parallel} parallel stream(s)," \
-            f" part size: {self.part_size}, last part size: {self.last_size} ..."
-        secho(f"{msg}", quiet=self.quiet)
+        if showInfo:
+            msg = f"Uploading file {file} {'' if self.key=='' else f'as key {self.key}'}\n" \
+                f"    in {self.num_parts} part(s)" \
+                f" using up to {self.parallel} parallel stream(s)," \
+                f" part size: {self.part_size}, last part size: {self.last_size} ..."
+            secho(f"{msg}", quiet=self.quiet)
 
     def scan_parts(self):
         try:
@@ -136,7 +169,7 @@ class OARepoS3Client(object):
         logger.debug(f"{funcname()} {init_url}")
         logger.debug(f"{funcname()} {fileinfo}")
         logger.debug(f"{funcname()} {headers}")
-        resp = requests.post(init_url, data=json.dumps(fileinfo), headers=headers, verify=False)
+        resp = requests.post(init_url, data=json.dumps(fileinfo), headers=headers, verify=self.https_verify)
         logger.debug(f"{funcname()} status: {resp.status_code}")
         if resp.status_code != 201:
             raise Exception(f"{funcname()} failed (http code {resp.status_code})", STATUS_WRONG_SERVER_RESPONSE)
@@ -152,7 +185,7 @@ class OARepoS3Client(object):
         presign_url = f"{self.urlUpload}/{partNum}/presigned"
         logger.debug(f"{funcname()} presign_part_upload (url:{presign_url})")
         try:
-            resp = requests.get(presign_url, verify=False)
+            resp = requests.get(presign_url, verify=self.https_verify)
             logger.debug(f"{funcname()} status: {resp.status_code}")
             if resp.status_code >= 400:
                 raise Exception(f"Upload presign failed. (http code {resp.status_code})")
@@ -167,7 +200,7 @@ class OARepoS3Client(object):
     def get_parts(self):
         parts_url = f"{self.urlUpload}/parts"
         logger.debug(f"{funcname()} parts_url:{parts_url}")
-        resp = requests.get(parts_url, verify=False)
+        resp = requests.get(parts_url, verify=self.https_verify)
         if resp.status_code >= 400:
             raise Exception(f"Upload not found. (http code {resp.status_code})")
         logger.debug(f"{funcname()} status:{resp.status_code} resp.text: {resp.text}")
@@ -189,7 +222,7 @@ class OARepoS3Client(object):
         logger.debug(f"{funcname()} parts_json: {parts4complete_json}")
         headers = {'Content-Type': 'application/json'}
         secho('Completing upload ...', quiet=self.quiet)
-        resp = requests.post(complete_url, data=parts4complete_json, headers=headers, verify=False)
+        resp = requests.post(complete_url, data=parts4complete_json, headers=headers, verify=self.https_verify)
         logger.debug(f"{funcname()} status: {resp.status_code}")
         # logger.debug(f"{funcname()} resp.text: {resp.text}")
         if resp.status_code >= 400:
@@ -204,7 +237,7 @@ class OARepoS3Client(object):
         abort_url = f"{self.urlUpload}/abort"
         logger.debug(f"{funcname()} abort_url:{abort_url}")
         secho('Aborting upload ...', quiet=self.quiet)
-        resp = requests.delete(abort_url, verify=False)
+        resp = requests.delete(abort_url, verify=self.https_verify)
         if resp.status_code >= 400:
             raise Exception(f"Upload abort failed (http code {resp.status_code})", STATUS_WRONG_SERVER_RESPONSE)
         logger.debug(f"{funcname()} status:{resp.status_code} resp.text: {resp.text}")
@@ -212,10 +245,26 @@ class OARepoS3Client(object):
         return resp
 
 
+    def revoke_token(self):
+        revoke_url = f"{self.url}/access-tokens/revoke"
+        logger.debug(f"{funcname()} revoke_url:{revoke_url}")
+        secho('Revoking token ...', quiet=self.quiet)
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f"Bearer {self.token}"
+        }
+        resp = requests.post(revoke_url, headers=headers, verify=self.https_verify)
+        if resp.status_code >= 400:
+            raise Exception(f"Token revoke failed (http code {resp.status_code})", STATUS_WRONG_SERVER_RESPONSE)
+        logger.debug(f"{funcname()} status:{resp.status_code} resp.text: {resp.text}")
+        secho(f'Token revoked.', prefix='OK', quiet=self.quiet)
+        return resp
+
+
     def delete_file(self):
         logger.debug(f"{funcname()} delete_file")
         delete_url = f"{self.urlFiles}/{self.key}"
-        resp = requests.delete(delete_url, verify=False)
+        resp = requests.delete(delete_url, verify=self.https_verify)
         logger.debug(f"{funcname()} status: {resp.status_code}")
 
 
@@ -251,7 +300,8 @@ class OARepoS3Client(object):
                     logger.debug(f"...#{partNum} ETag: {ETag}")
                     ok = True
                     break
-            except ConnectionError as e:
+            # except (NewConnectionError, ConnectionError) as e:
+            except (ConnectionError) as e:
                 msg = f"Error uploading part #{partNum} retry {retry} from {MAX_RETRIES}"
                 secho(f"{msg}", prefix='\nWARN', fg='yellow', quiet=self.quiet)
                 logger.debug(f"  #{partNum} Error [{e}]")
@@ -260,14 +310,18 @@ class OARepoS3Client(object):
                 secho(f"{msg}", prefix='\nWARN', fg='yellow', quiet=self.quiet)
                 logger.debug(f"  #{partNum} Error [{e}]")
             except SignalException as e:
-                logger.debug(f"  #{partNum} Error [{e}]")
-                break
+                emsg, signumber = e.args[1] if len(e.args) > 1 else (None, None)
+                msg = f"SIGNAL: Error uploading part #{partNum} retry {retry} from {MAX_RETRIES} [{e}/{type(e)}]"
+                # secho(f"{msg}", prefix='\nWARN', fg='yellow', quiet=self.quiet)
+                logger.debug(f"  #{partNum} Error [{e}/{type(e)}]")
+                if signumber != signal.SIGALRM: break
             except Exception as e:
-                logger.critical(f"  #{partNum} Error [{e}]")
+                msg = f"General error uploading part #{partNum} retry {retry} from {MAX_RETRIES} [{e}/{type(e)}]"
+                secho(f"{msg}", prefix='\nWARN', fg='yellow', quiet=self.quiet)
+                logger.debug(f"  #{partNum} Error [{e}/type(e)]")
 
         logger.debug(f"<<<Stop upload_part #{partNum} status:{'OK' if ok else 'ERR'}.")
         if ok:
-            # secho(f"Part #{partNum} uploaded.", prefix='OK', quiet=self.quiet)
             return dict(PartNumber=partNum, status=STATUS_OK, ETag=ETag)
         else:
             raise Exception(f"Part {partNum} upload failed.", STATUS_ERR_MAX_RETRIES)

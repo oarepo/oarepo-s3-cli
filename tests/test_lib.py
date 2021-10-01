@@ -110,10 +110,10 @@ def test_init_upload(mock_path_getsize, mock_path_isfile, mock_path_exists, mock
     mock_path_isfile.side_effect = lambda fn: fn == test_filename
     mock_path_getsize.side_effect = lambda fn: test_size if fn == test_filename else FileNotFoundError
     oas3.quiet = True
-    oas3.key = mock_oarepo.key
     oas3.token = mock_oarepo.token
-    oas3.set_file(test_filename)
+    oas3.set_file(test_filename, mock_oarepo.key)
     assert oas3.file == test_filename
+    assert oas3.key == mock_oarepo.key
     assert oas3.data_size == test_size
     assert oas3.num_parts == 1
     assert oas3.part_size == test_size

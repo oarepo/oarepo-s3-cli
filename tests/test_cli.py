@@ -11,7 +11,7 @@ import re, string, random, os.path, subprocess, logging
 import responses
 from click.testing import CliRunner
 from unittest import mock
-from oarepo_s3_cli.clickdef import cli_main, cli_test
+from oarepo_s3_cli.clickdef import cli_main, cli_debug_test
 from tests.conftest import fake_file_info, mock_apply_async_func
 
 # logger = logging
@@ -45,7 +45,7 @@ def test_logTest(mock_oarepo):
             }
         }
     )
-    result = CliRunner(mix_stderr=False).invoke(cli_main, ['-t', 'mock_token', '-d', '-e', mock_oarepo.url, 'test'])
+    result = CliRunner(mix_stderr=False).invoke(cli_main, ['-t', 'mock_token', '-d', '-e', mock_oarepo.url, 'debug_test'])
     print(result.output)
     print(result.stderr_bytes)
     assert result.exit_code == 0
