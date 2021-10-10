@@ -25,3 +25,5 @@ Version 0.1.3
  - CLI entry point added
  - exception handling changed
 
+Version 0.1.4
+ - added support for nr-test variant
