@@ -26,7 +26,7 @@ CTX_VARS=['debug', 'quiet', 'endpoint', 'token', 'logger', 'noninteractive']
 @click.option('-q', '--quiet', default=False, is_flag=True, show_default=True)
 @click.option('-n', '--noninteractive', default=False, is_flag=True, show_default=True)
 @click.option('-e', '--endpoint', required=True, help='OARepo HTTPS endpoint e.g. https://repo.example.org')
-@click.option('-t', '--token', required=True, help='Access token (can be grabbed from env.variable "TOKEN")', envvar='TOKEN', show_default=True)
+@click.option('-t', '--token', required=True, help='Access token (can be alternatively specified in env.variable "TOKEN")', envvar='TOKEN', show_default=True)
 def cli_main(ctx, debug, quiet, noninteractive, endpoint, token):
     ctx.ensure_object(dict)
     loglevel = logging.INFO

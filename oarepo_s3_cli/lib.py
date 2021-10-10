@@ -160,6 +160,7 @@ class OARepoS3Client(object):
         init_url = f"{self.urlFiles}?multipart=true"
         fileinfo = {
             'key': self.key,
+            'name': self.key,
             'multipart_content_type': self.contentType,
             'size': self.data_size,
         }
@@ -190,7 +191,9 @@ class OARepoS3Client(object):
             logger.debug(f"{funcname()} status: {resp.status_code}")
             if resp.status_code >= 400:
                 raise Exception(f"Upload presign failed. (http code {resp.status_code})")
-            part_s3_url = resp.json()['url']
+            logger.debug(f"{funcname()} status: {resp.json()}")
+            resp_json = resp.json()
+            part_s3_url = resp_json['url'] if 'url' in resp_json.keys() else resp_json['presignedUrls'][str(partNum)]
             logger.debug(f"{funcname()} part_s3_url: {part_s3_url}")
             return part_s3_url
         except Exception as e:

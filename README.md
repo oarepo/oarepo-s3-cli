@@ -9,7 +9,7 @@ OARepo command-line upload client
 
 ## global options
  * -e, --endpoint `<url>` OARepo HTTPS endpoint e.g. https://repo.example.org (required)
- * -t, --token `<string>` upload auth token obtained from OARepo (required, can be grabbed from env.variable "TOKEN")
+ * -t, --token `<string>` upload auth token obtained from OARepo (required, can be alternatively specified in env.variable "TOKEN")
  * -d, debug (default: False)
  * -q, quiet (default: False)
  * -n, --noninteractive (default: False)

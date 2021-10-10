@@ -23,6 +23,7 @@ def get_file_chunk_size(file_size):
             last_size = remain
             num += 1
         return num, chunk_size, last_size
+    # return Math.min(Math.max(MIN_PART_SIZE, Math.ceil(file_size / MAX_PARTS)), MAX_PART_SIZE)
     if file_size <= MIN_PART_SIZE:
         return 1, file_size, file_size
     elif file_size <= MAX_PARTS * MIN_PART_SIZE:
