@@ -15,12 +15,14 @@ import requests
 from oarepo_s3_cli.utils import *
 from oarepo_s3_cli.lib import OARepoS3Client
 from oarepo_s3_cli.constants import *
+from oarepo_s3_cli.version import __version__
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 CTX_VARS=['debug', 'quiet', 'endpoint', 'token', 'logger', 'noninteractive']
 
 @click.group()
+@click.version_option(__version__)
 @click.pass_context
 @click.option('-d', '--debug', default=False, is_flag=True, show_default=True)
 @click.option('-q', '--quiet', default=False, is_flag=True, show_default=True)
