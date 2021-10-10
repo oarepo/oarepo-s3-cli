@@ -27,3 +27,6 @@ Version 0.1.3
 
 Version 0.1.4
  - added support for nr-test variant
+
+Version 0.1.5
+ - impl. --version option
