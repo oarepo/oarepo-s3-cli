@@ -18,7 +18,7 @@ MAX_RETRIES = 5
 
 CYCLE_SLEEP = 1    # progress bar refresh interval
 RETRY_SLEEP = 2    # sleep(RETRY_SLEEP * retry)
-MON_TIMEOUT = 3600
+MON_TIMEOUT = 300
 WORKER_TIMEOUT = 60
 FORCED_GET_TIMEOUT = 0.1
 

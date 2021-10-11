@@ -42,16 +42,17 @@ class Parallels():
             raise SignalException(self.pn, (f'Signal "{signame}"({signumber})', signumber))
             # raise SignalException(self.pn, f'Signal "{signame}"({signumber})')
 
-    def output(self, stats, spinchar, elapsed, barchar='#'):
+    def output(self, stats, spinchar, elapsed, timer=0, barchar='#'):
         elapsed_f = str(timedelta(seconds=elapsed))
         fin_perc = stats.finished * 100 / self.num_parts
         fin_bar = round(stats.finished * BAR_LENGTH / self.num_parts)
         bar = f"{barchar * fin_bar}{spinchar if fin_bar < BAR_LENGTH else ''}{' ' * (BAR_LENGTH - fin_bar - 1)}"
         w = len(str(self.num_parts))
-        for_terminate = f"terminating:{stats.for_terminate}" if stats.for_terminate>0 else ''
-        vals = (elapsed_f, fin_perc, bar, stats.pending, stats.running, stats.finished, stats.failed, for_terminate)
-        secho(f"\r %s %3d%% [%s] pending:%-{w}d; started:%-{w}d; finished:%-{w}d; failed:%-{w}d %s" % vals,
-              nl=False, quiet=self.quiet)
+        term4 = f"terminating:{stats.for_terminate}" if stats.for_terminate>0 else ''
+        timer_f = "%6s" % (f"({timer}s)",) if timer>0 else ''
+        vals = (elapsed_f, fin_perc, bar, stats.pending, stats.running, stats.finished, stats.failed, term4, timer_f)
+        msg = f"%s %3d%% [%s] pending:%-{w}d; started:%-{w}d; finished:%-{w}d; failed:%-{w}d %s %s" % vals
+        secho(f"\r %-100s." % (msg,), nl=False, quiet=self.quiet)
         sys.stdout.flush()
 
 
@@ -122,16 +123,15 @@ class Parallels():
         try:
             while True:
                 secs = round(time.time() - start)
-                self.output(stats, spinner.get(), secs)
+                timer = round(time.time() - stats.ts)
+                self.output(stats, spinner.get(), secs, timer)
                 if self.killed:
                     pool.terminate()
                     break
                 if stats.remaining == 0: break
-                if secs > self.mon_timeout:
-                    # if click.confirm(f"\nTimeout ({MON_TIMEOUT}s) reached - double timeout (to {MON_TIMEOUT*2}s) and continue?"):
-                    #     self.mon_timeout *= 2
-                    # else: break
-                    logger.debug(f"\nTimeout ({MON_TIMEOUT}s) reached")
+                if timer > self.mon_timeout:
+                    logger.critical(f"\nMonitor timeout ({MON_TIMEOUT}s) reached")
+                    secho(f"\nMonitor timeout ({MON_TIMEOUT}s) reached", prefix='\nERR', fg='red')
                     break
                 time.sleep(CYCLE_SLEEP)
         except Exception as e:

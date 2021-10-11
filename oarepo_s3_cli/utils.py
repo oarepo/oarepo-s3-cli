@@ -6,13 +6,10 @@
 # it under the terms of the MIT License; see LICENSE file for more details.
 """ OARepo S3 client utils. """
 
-import sys
+import sys, click, signal, time
 import os.path
-import click
 import multiprocessing as mp
-import signal
 from oarepo_s3_cli.constants import *
-from ctypes import c_char
 
 def get_file_chunk_size(file_size):
     def getnumchunks(file_size, chunk_size):
@@ -77,6 +74,10 @@ class Stats(object):
         self.finished = finished
         self.failed = 0
         self.for_terminate = 0
+        self.ts = 0
+
+    def set_ts(self):
+        self.ts = time.time()
 
     def decr(self):
         if self.pending > 0:
@@ -86,22 +87,27 @@ class Stats(object):
         else:
             str = f"{self.pending}/{self.running}/{self.finished}/{self.failed}"
             raise Exception(f"Cannot decrementing ({str})", STATUS_GENERAL_ERROR)
+        self.set_ts()
 
     def start(self, i=1):
         self.pending -= i
         self.running += i
+        self.set_ts()
 
     def finish(self):
         self.decr()
         self.finished += 1
+        self.set_ts()
 
     def fail(self):
         self.decr()
         self.failed += 1
+        self.set_ts()
 
     def terminate(self):
         self.decr()
         self.for_terminate += 1
+        self.set_ts()
 
     @property
     def remaining(self):
