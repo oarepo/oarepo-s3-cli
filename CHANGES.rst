@@ -30,3 +30,7 @@ Version 0.1.4
 
 Version 0.1.5
  - impl. --version option
+
+Version 0.1.6
+ - mon.timeout processing fixed
+ - timer impl.
