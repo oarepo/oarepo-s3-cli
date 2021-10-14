@@ -83,27 +83,27 @@ class OARepoS3Client(object):
         self.set_file(file, key, showInfo=False)
         msg = f"Checking file uploaded as key {self.key} with local file {file} ..."
         secho(f"{msg}", quiet=self.quiet)
-        chunk_size = MIN_PART_SIZE
-        hashalg = hashlib.sha256()
+        chunk_size = HASHING_CHUNK_SIZE
+        hashalg = hashlib.blake2b()
         with open(file, "rb") as f:
             while 1:
                 chunk = f.read(chunk_size)
                 if not chunk: break
                 hashalg.update(chunk)
-        # local_hash = hashlib.sha256(bytes).hexdigest()
         local_hash = hashalg.hexdigest()
+        logger.debug(f"\n local blake2b hash: {local_hash}")
         urlFile = f"{self.urlFiles}{self.key}"
         headers = { 'Authorization': f"Bearer {self.token}" }
-        resp = requests.get(urlFile, headers=headers, verify=self.https_verify)
+        resp = requests.get(urlFile, stream=True, headers=headers, verify=self.https_verify)
         if resp.status_code >= 400:
             raise Exception(f"Can't read remote file.", STATUS_GENERAL_ERROR)
-        hashalg = hashlib.sha256()
+        hashalg = hashlib.blake2b()
         for data in resp.iter_content(chunk_size):
             hashalg.update(data)
         remote_hash = hashalg.hexdigest()
-        logger.debug(f"\n local sha256 hash: {local_hash}\nremote sha256 hash: {remote_hash}")
+        logger.debug(f"\n remote blake2b hash: {remote_hash}")
         if local_hash==remote_hash:
-            secho(f"Local and remote files have the same sha256 hash.",
+            secho(f"Local and remote files have the same blake2b hash.",
                 prefix='OK', quiet=self.quiet)
             return True, STATUS_OK
         # return False, STATUS_GENERAL_ERROR
