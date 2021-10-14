@@ -34,3 +34,6 @@ Version 0.1.5
 Version 0.1.6
  - mon.timeout processing fixed
  - timer impl.
+
+Version 0.1.7
+ - check cmd optimized (chunk 8192, blake2b)
