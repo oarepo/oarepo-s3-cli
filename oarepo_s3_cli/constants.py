@@ -8,7 +8,6 @@
 
 import multiprocessing as mp
 
-
 MIB_5 = 5*1024*1024
 MIN_PART_SIZE = MIB_5
 MAX_PART_SIZE = MIB_5 * 5

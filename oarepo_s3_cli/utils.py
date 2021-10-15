@@ -6,7 +6,7 @@
 # it under the terms of the MIT License; see LICENSE file for more details.
 """ OARepo S3 client utils. """
 
-import sys, click, signal, time
+import click, hashlib, requests, signal, sys, time
 import os.path
 import multiprocessing as mp
 from oarepo_s3_cli.constants import *
@@ -124,6 +124,29 @@ class Spinner(object):
         spinchar = self.chars[self.index]
         self.index = self.index + 1 if self.index + 1 < self.len else 0
         return spinchar
+
+def get_local_hash(file):
+    hashalg = hashlib.blake2b()
+    with open(file, "rb") as f:
+        while 1:
+            chunk = f.read(HASHING_CHUNK_SIZE)
+            if not chunk: break
+            hashalg.update(chunk)
+    local_hash = hashalg.hexdigest()
+    return local_hash
+
+def get_remote_hash(token, url):
+    headers = {
+        'Authorization': f"Bearer {token}"
+    }
+    resp = requests.get(url, stream=True, headers=headers, verify=False)
+    if resp.status_code >= 400:
+        raise Exception(f"Can't read remote file.", STATUS_GENERAL_ERROR)
+    hashalg = hashlib.blake2b()
+    for data in resp.iter_content(HASHING_CHUNK_SIZE):
+        hashalg.update(data)
+    remote_hash = hashalg.hexdigest()
+    return remote_hash
 
 
 class UploadFailedException(Exception):

@@ -11,6 +11,8 @@ import hashlib, re
 from os import path
 import time, requests, json, logging
 from urllib3.exceptions import NewConnectionError
+import multiprocessing as mp
+
 from oarepo_s3_cli.utils import *
 from oarepo_s3_cli.constants import *
 from oarepo_s3_cli.parallels import Parallels
@@ -83,24 +85,18 @@ class OARepoS3Client(object):
         self.set_file(file, key, showInfo=False)
         msg = f"Checking file uploaded as key {self.key} with local file {file} ..."
         secho(f"{msg}", quiet=self.quiet)
-        chunk_size = HASHING_CHUNK_SIZE
-        hashalg = hashlib.blake2b()
-        with open(file, "rb") as f:
-            while 1:
-                chunk = f.read(chunk_size)
-                if not chunk: break
-                hashalg.update(chunk)
-        local_hash = hashalg.hexdigest()
-        logger.debug(f"\n local blake2b hash: {local_hash}")
         urlFile = f"{self.urlFiles}{self.key}"
-        headers = { 'Authorization': f"Bearer {self.token}" }
-        resp = requests.get(urlFile, stream=True, headers=headers, verify=self.https_verify)
-        if resp.status_code >= 400:
-            raise Exception(f"Can't read remote file.", STATUS_GENERAL_ERROR)
-        hashalg = hashlib.blake2b()
-        for data in resp.iter_content(chunk_size):
-            hashalg.update(data)
-        remote_hash = hashalg.hexdigest()
+        pool = mp.Pool(1)
+        fut_rem = pool.apply_async(get_remote_hash, args=(self.token, urlFile,))
+        pool.close()
+
+        local_hash = get_local_hash(file)
+        logger.debug(f"\n local blake2b hash: {local_hash}")
+
+        remote_hash = fut_rem.get()
+        pool.join()
+        # remote_hash = get_remote_hash(self.token, urlFile)
+
         logger.debug(f"\n remote blake2b hash: {remote_hash}")
         if local_hash==remote_hash:
             secho(f"Local and remote files have the same blake2b hash.",

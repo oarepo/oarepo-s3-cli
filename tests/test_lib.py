@@ -7,13 +7,14 @@
 
 """Module lib tests."""
 
-import re, string, random, json, subprocess, logging, sys
-from os import path, access, R_OK
+import re
 import responses
 from unittest import mock
-from oarepo_s3_cli.lib import OARepoS3Client
+
 from oarepo_s3_cli.constants import *
+from oarepo_s3_cli.lib import OARepoS3Client
 from tests.conftest import fake_file_info
+
 
 @mock.patch('oarepo_s3_cli.lib.requests.get')
 def test_check_token_status(mock_get, mock_oarepo):

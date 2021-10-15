@@ -7,16 +7,18 @@
 
 """Pytest configuration."""
 
-import pytest, urllib3, string, random
-import multiprocessing.pool as mppool
-from collections import namedtuple
+import hashlib, pytest, string, random, urllib3
 from unittest.mock import Mock
 
 fake_file_size = 1024
+fake_data = ''.join(random.choices(string.hexdigits, k=fake_file_size))
+m = hashlib.blake2b()
+m.update(fake_data.encode())
 fake_file_info = Mock(
     size=fake_file_size,
     filename=''.join(random.choices(string.hexdigits, k=8)),
-    data=''.join(random.choices(string.hexdigits, k=fake_file_size)),
+    data=fake_data,
+    hash_blake2b=m.hexdigest()
 )
 
 @pytest.fixture(scope='module')
