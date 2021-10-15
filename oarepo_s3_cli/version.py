@@ -11,4 +11,4 @@ This file is imported by ``oarepo_s3_cli.__init__``,
 and parsed by ``setup.py``.
 """
 
-__version__ = '0.1.7'
+__version__ = '0.1.8'

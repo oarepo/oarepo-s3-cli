@@ -37,3 +37,6 @@ Version 0.1.6
 
 Version 0.1.7
  - check cmd optimized (chunk 8192, blake2b)
+
+Version 0.1.8
+ - check cmd paralelized
