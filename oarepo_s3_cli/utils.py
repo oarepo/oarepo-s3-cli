@@ -125,27 +125,29 @@ class Spinner(object):
         self.index = self.index + 1 if self.index + 1 < self.len else 0
         return spinchar
 
-def get_local_hash(file):
-    hashalg = hashlib.blake2b()
+def get_local_hash(file, _part_size=0):
+    hashes = []
+    part_size = _part_size if _part_size!=0 else MIN_PART_SIZE
     with open(file, "rb") as f:
         while 1:
-            chunk = f.read(HASHING_CHUNK_SIZE)
+            chunk = f.read(part_size)
             if not chunk: break
-            hashalg.update(chunk)
-    local_hash = hashalg.hexdigest()
+            hashes.append(hashlib.md5(chunk).digest())
+    local_hash = hashlib.md5(b''.join(hashes)).hexdigest() + '-' + str(len(hashes))
     return local_hash
 
-def get_remote_hash(token, url):
+def get_remote_hash(token, url, _part_size=0):
+    hashes = []
+    part_size = _part_size if _part_size!=0 else MIN_PART_SIZE
     headers = {
         'Authorization': f"Bearer {token}"
     }
     resp = requests.get(url, stream=True, headers=headers, verify=False)
     if resp.status_code >= 400:
         raise Exception(f"Can't read remote file.", STATUS_GENERAL_ERROR)
-    hashalg = hashlib.blake2b()
-    for data in resp.iter_content(HASHING_CHUNK_SIZE):
-        hashalg.update(data)
-    remote_hash = hashalg.hexdigest()
+    for chunk in resp.iter_content(part_size):
+        hashes.append(hashlib.md5(chunk).digest())
+    remote_hash = hashlib.md5(b''.join(hashes)).hexdigest() + '-' + str(len(hashes))
     return remote_hash
 
 

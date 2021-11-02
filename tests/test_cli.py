@@ -72,7 +72,7 @@ def test_mock_open_decor(mock_path_getsize, mock_path_isfile, mock_path_exists, 
 
 @responses.activate
 @mock.patch('multiprocessing.pool.Pool.apply_async', mock_apply_async_func)
-@mock.patch('builtins.open', new_callable=mock.mock_open, read_data=fake_file_info.data)
+@mock.patch('builtins.open', new_callable=mock.mock_open, read_data=fake_file_info.data.encode())
 @mock.patch('os.access')
 @mock.patch('os.path.exists')
 @mock.patch('os.path.isfile')
@@ -106,11 +106,17 @@ def test_upload(
     file_url = f'{files_url}{mock_oarepo.key}'
     upload_url = f'{file_url}/{mock_oarepo.uploadId}'
     presign_url = f"{upload_url}/{mock_oarepo.partNum}/presigned"
+    parts_url = f'{upload_url}/parts'
     part_s3_url = 'https://mock_part_s3_url.example.org'
     responses.add(responses.GET, presign_url, status=200,
         json={
           'url': part_s3_url,
         }
+    )
+    responses.add(responses.GET, parts_url, status=200,
+        json=[
+          {'ETag':mock_oarepo.ETag , 'PartNumber':1}
+        ]
     )
     responses.add(responses.PUT, part_s3_url, status=201,
         headers={'ETag': mock_oarepo.ETag}
@@ -118,7 +124,8 @@ def test_upload(
     complete_url = f"{upload_url}/complete"
     responses.add(responses.POST, complete_url, status=200,
         json={
-            'location': file_url
+            'location': file_url,
+            'checksum': f"etag:{fake_file_info.hash_md5}"
         }
     )
 

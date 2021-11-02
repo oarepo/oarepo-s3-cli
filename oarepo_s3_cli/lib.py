@@ -36,16 +36,21 @@ class OARepoS3Client(object):
         self.parallel = MAX_PARALLEL if parallel == 0 else parallel
         self.quiet = quiet
         self.key = key
+        self.file = None
         self.contentType = 'application/octet-stream'
         self.parts, self.parts_unfin, self.uploadId, self.output = [], [], None, ''
         self.urlFiles = self.check_token_status(self.token)
+        self.checksum = None
+        self.nocheck = True
 
-    def process_click_upload(self, key=None, file=None):
+    def process_click_upload(self, key=None, file=None, nocheck=True):
+        self.nocheck = nocheck
         self.set_file(file, key)
         self.init_upload()
         return self.do_upload()
 
-    def process_click_resume(self, key, file, uploadId):
+    def process_click_resume(self, key, file, uploadId, nocheck=True):
+        self.nocheck = nocheck
         self.set_file(file, key)
         self.set_uploadId(uploadId)
         # parts = self.get_parts()
@@ -74,6 +79,7 @@ class OARepoS3Client(object):
             if st == STATUS_OK:
                 logger.debug(f"{funcname()} parts:\n{self.parts}")
                 location = self.complete_upload()
+                if not self.nocheck: self.process_click_check()
                 return location, STATUS_OK
             else:
                 raise Exception(f"Upload failed with status {st}.", st)
@@ -81,25 +87,31 @@ class OARepoS3Client(object):
             logger.debug(f"{funcname()} caught and raising Exception \"{e}\" {procname()}")
             raise e
 
-    def process_click_check(self, key, file):
-        self.set_file(file, key, showInfo=False)
-        msg = f"Checking file uploaded as key {self.key} with local file {file} ..."
+    def process_click_check(self, key=None, file=None):
+        if self.file is None or self.key is None: self.set_file(file, key, showInfo=False)
+        msg = f"Checking file uploaded as key {self.key} with local file {self.file} ..."
         secho(f"{msg}", quiet=self.quiet)
         urlFile = f"{self.urlFiles}{self.key}"
-        pool = mp.Pool(1)
-        fut_rem = pool.apply_async(get_remote_hash, args=(self.token, urlFile,))
-        pool.close()
+        if self.checksum is None:
+            pool = mp.Pool(1)
+            fut_rem = pool.apply_async(get_remote_hash, args=(self.token, urlFile, self.part_size,))
+            pool.close()
+        else:
+            logger.debug(f"using ETag as remote checksum: {self.checksum}")
 
-        local_hash = get_local_hash(file)
-        logger.debug(f"\n local blake2b hash: {local_hash}")
+        local_hash = get_local_hash(self.file, self.part_size)
+        logger.debug(f"\n local checksum: {local_hash}")
+        # return True, STATUS_OK
 
-        remote_hash = fut_rem.get()
-        pool.join()
-        # remote_hash = get_remote_hash(self.token, urlFile)
+        if self.checksum is None:
+            pool.join()
+            remote_hash = fut_rem.get()
+        else:
+            remote_hash = self.checksum
 
-        logger.debug(f"\n remote blake2b hash: {remote_hash}")
+        logger.debug(f"\n remote checksum: {remote_hash}")
         if local_hash==remote_hash:
-            secho(f"Local and remote files have the same blake2b hash.",
+            secho(f"Local and remote files have the same checksum.",
                 prefix='OK', quiet=self.quiet)
             return True, STATUS_OK
         # return False, STATUS_GENERAL_ERROR
@@ -225,9 +237,14 @@ class OARepoS3Client(object):
         resp = requests.post(complete_url, data=parts4complete_json, headers=headers, verify=self.https_verify)
         logger.debug(f"{funcname()} status: {resp.status_code}")
         # logger.debug(f"{funcname()} resp.text: {resp.text}")
+        # secho(f"{funcname()} resp.text: {resp.text}")
         if resp.status_code >= 400:
             raise Exception(f"Upload completing failed (http code {resp.status_code})", STATUS_WRONG_SERVER_RESPONSE)
-        location = resp.json()['location']
+        rjson = resp.json()
+        location = rjson['location']
+        self.checksum = rjson['checksum'] if 'checksum' in rjson.keys() else None
+        logger.debug(f"Storage checksum={self.checksum}")
+        if self.checksum is not None: self.checksum = self.checksum.lstrip('etag:')
         logger.debug(f"{funcname()} location: {location}")
         secho(f'Upload completed. ({location})', prefix='OK', quiet=self.quiet)
         return location

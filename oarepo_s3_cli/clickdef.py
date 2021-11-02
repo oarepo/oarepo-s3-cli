@@ -49,7 +49,9 @@ def cli_main(ctx, debug, quiet, noninteractive, endpoint, token):
               help='object key(s)/names(s) for uploaded files in S3, repeatable [default: basename of file]')
 @click.option('-p', '--parallel', default=0, type=int, show_default=False,
               help='number of parallel upload streams [default: CPU count]')
-def cli_upload(ctx, files, keys, parallel):
+@click.option('-c', '--nocheck', default=False, is_flag=True, show_default=True,
+              help='no automatic checksum test of local and uploaded files')
+def cli_upload(ctx, files, keys, parallel, nocheck):
     co = ctx.obj
     logger = ctx.obj['logger']
     if len(keys) < len(files): keys += (len(files)-len(keys)) * (None,)
@@ -60,7 +62,7 @@ def cli_upload(ctx, files, keys, parallel):
         logger.debug(f"{funcname()} file:{file}, key={key}")
         try:
             oas3 = OARepoS3Client(co['endpoint'], co['token'], parallel, co['quiet'])
-            location, code = oas3.process_click_upload(key, file)
+            location, code = oas3.process_click_upload(key, file, nocheck)
         except (FileNotFoundError, PermissionError,
                 requests.exceptions.ConnectionError, urllib3.exceptions.NewConnectionError) as e:
             msg, code = e.args if len(e.args) > 1 else (e.args[0], STATUS_UNKNOWN)
@@ -68,11 +70,12 @@ def cli_upload(ctx, files, keys, parallel):
         except Exception as e:
             msg, code = e.args if len(e.args) > 1 else (e.args[0], STATUS_UNKNOWN)
             logger.debug(f"Error {code} \"{msg}\"[{type(e)}]")
+            secho(f"Error {code} \"{msg}\"", prefix='ERR', fg='red', quiet=co['quiet'])
             uploadId = oas3.get_uploadId()
             if co['noninteractive'] or click.confirm(f"\ntry resume upload?"):
                 try:
                     oas3 = OARepoS3Client(co['endpoint'], co['token'], parallel, co['quiet'])
-                    location, code = oas3.process_click_resume(key, file, uploadId)
+                    location, code = oas3.process_click_resume(key, file, uploadId, nocheck)
                 except Exception as e:
                     msg, code = e.args if len(e.args) > 1 else (e.args[0], STATUS_UNKNOWN)
             if code != STATUS_OK:
@@ -91,13 +94,15 @@ def cli_upload(ctx, files, keys, parallel):
 @click.option('-u', '--uploadId', 'uploadId', required=True, help='uploadId returned from upload')
 @click.option('-p', '--parallel', default=0, type=int, show_default=False,
               help='number of parallel upload streams [default: CPU count]')
-def cli_resume(ctx, file, key, uploadId, parallel):
+@click.option('-c', '--nocheck', default=False, is_flag=True, show_default=True,
+              help='no automatic checksum test of local and uploaded files')
+def cli_resume(ctx, file, key, uploadId, parallel, nocheck):
     try:
         co = ctx.obj
         logger = ctx.obj['logger']
         logger.debug(f"{funcname()} file={file}, key={key}, uploadId={uploadId}")
         oas3 = OARepoS3Client(co['endpoint'], co['token'], parallel, co['quiet'])
-        location, code = oas3.process_click_resume(key, file, uploadId)
+        location, code = oas3.process_click_resume(key, file, uploadId, nocheck)
         secho(f"Done. [{location}]", prefix='OK', quiet=co['quiet'])
     except Exception as e:
         msg, code = e.args if len(e.args)>1 else (e.args[0], STATUS_UNKNOWN)

@@ -73,8 +73,8 @@ def test_hash_file(mock_path_getsize, mock_path_isfile, mock_path_exists, mock_o
     responses.add(responses.GET, file_url, status=200, body=fake_file_info.data)
     with mock.patch('builtins.open', new_callable=mock.mock_open, read_data=fake_file_info.data.encode()):
         local_hash = get_local_hash(fake_file_info.filename)
-        assert local_hash == fake_file_info.hash_blake2b
+        assert local_hash == fake_file_info.hash_md5
         remote_hash = get_remote_hash(mock_oarepo.token, file_url)
-        assert remote_hash == fake_file_info.hash_blake2b
+        assert remote_hash == fake_file_info.hash_md5
         assert local_hash == remote_hash
         assert (True, STATUS_OK) == oas3.process_click_check(mock_oarepo.key, test_filename)
