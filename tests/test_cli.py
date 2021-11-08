@@ -109,9 +109,7 @@ def test_upload(
     parts_url = f'{upload_url}/parts'
     part_s3_url = 'https://mock_part_s3_url.example.org'
     responses.add(responses.GET, presign_url, status=200,
-        json={
-          'url': part_s3_url,
-        }
+        json={ 'presignedUrls':{'1': part_s3_url, } }
     )
     responses.add(responses.GET, parts_url, status=200,
         json=[

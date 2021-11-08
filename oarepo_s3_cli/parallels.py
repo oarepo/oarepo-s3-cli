@@ -15,8 +15,9 @@ from oarepo_s3_cli.utils import *
 logger = logging
 
 class Parallels():
-    def __init__(self, worker, num_parts, parts_unfin, parallel=0, quiet=False):
+    def __init__(self, worker, idle_callback, num_parts, parts_unfin, parallel=0, quiet=False):
         self.worker = worker
+        self.idle_callback = idle_callback
         self.num_parts = num_parts
         self.parts_unfin = parts_unfin
         self.pool_size = MAX_PARALLEL if parallel == 0 else parallel
@@ -133,6 +134,7 @@ class Parallels():
                     logger.critical(f"\nMonitor timeout ({MON_TIMEOUT}s) reached")
                     secho(f"\nMonitor timeout ({MON_TIMEOUT}s) reached", prefix='\nERR', fg='red')
                     break
+                self.idle_callback()
                 time.sleep(CYCLE_SLEEP)
         except Exception as e:
             raise Exception(None, f'Main cycle Exception {e})')

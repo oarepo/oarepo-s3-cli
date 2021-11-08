@@ -113,6 +113,43 @@ class Stats(object):
     def remaining(self):
         return self.num_parts - self.finished - self.failed
 
+class SharedList():
+    def __init__(self, action, unfin, grouplen):
+        self.action = action
+        self.unfin = unfin
+        self.grouplen = grouplen
+        mpman = mp.Manager()
+        self.list = mpman.dict()
+        self.idx = 0
+
+    def prepare(self):
+        pnums = []
+        groupmax = min(self.idx+self.grouplen, len(self.unfin))
+        if groupmax > self.idx:
+            for i in range(self.idx, groupmax):
+                pn = self.unfin[i]
+                pnums.append(pn)
+            vals = self.action(pnums)
+            for pn in vals:
+                self.list[pn] = vals[pn]
+            self.idx = groupmax
+            # logger.debug(f" feeding list by {','.join(map(str,pnums))} idx={self.idx}")
+
+    def check(self, cnt=1):
+        if len(self.list) < cnt:
+            self.prepare()
+
+    def iter(self):
+        return(self.list)
+
+    def has_key(self, pn):
+        return(pn in self.list)
+
+    def pop(self, pn):
+        return(self.list.pop(pn, None))
+
+    def get_value(self, pn):
+        return(self.list[pn])
 
 class Spinner(object):
     def __init__(self):

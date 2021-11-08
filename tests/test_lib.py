@@ -12,6 +12,7 @@ import responses
 from unittest import mock
 
 from oarepo_s3_cli.constants import *
+from oarepo_s3_cli.utils import SharedList
 from oarepo_s3_cli.lib import OARepoS3Client
 from tests.conftest import fake_file_info
 
@@ -144,14 +145,13 @@ def test_init_upload(mock_path_getsize, mock_path_isfile, mock_path_exists, mock
     presign_url = f"{oas3.urlUpload}/1/presigned"
     part_s3_url = 'https://mock_part_s3_url.example.org'
     responses.add(responses.GET, presign_url, status=200,
-        json={
-          'url': part_s3_url,
-        }
+        json={ 'presignedUrls':{'1': part_s3_url, } }
     )
     responses.add(responses.PUT, part_s3_url, status=201,
         headers={'ETag': mock_oarepo.ETag}
     )
     oas3.quiet = False
+    oas3.presigns = SharedList(oas3.presign_parts_upload, [1], MAX_PRESIGNS)
     resp = oas3.upload_part(1, 'val')
     assert resp['PartNumber'] == 1
     assert resp['status'] == STATUS_OK

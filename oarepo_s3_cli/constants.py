@@ -14,6 +14,7 @@ MAX_PART_SIZE = MIB_5 * 5
 MAX_PARTS = 1000000
 MAX_PARALLEL = mp.cpu_count()
 MAX_RETRIES = 5
+MAX_PRESIGNS = 100
 
 CYCLE_SLEEP = 1    # progress bar refresh interval
 RETRY_SLEEP = 2    # sleep(RETRY_SLEEP * retry)
