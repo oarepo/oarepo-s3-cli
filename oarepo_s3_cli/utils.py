@@ -114,30 +114,39 @@ class Stats(object):
         return self.num_parts - self.finished - self.failed
 
 class SharedList():
-    def __init__(self, action, unfin, grouplen):
+    def __init__(self, action, unfin, grouplen, maxlen):
         self.action = action
         self.unfin = unfin
         self.grouplen = grouplen
+        self.maxlen = maxlen
         mpman = mp.Manager()
         self.list = mpman.dict()
         self.idx = 0
 
-    def prepare(self):
+    def prepare(self, cnt=0):
+        if cnt==0: cnt = self.maxlen
+        # cutting to smaller groups:
+        if cnt>self.grouplen:
+            for x in range(cnt // self.grouplen + (1 if (cnt % self.grouplen)>0 else 0)):
+                self.prepare(self.grouplen)
+            return
         pnums = []
-        groupmax = min(self.idx+self.grouplen, len(self.unfin))
+        groupmax = min(self.idx+cnt, len(self.unfin))
         if groupmax > self.idx:
             for i in range(self.idx, groupmax):
                 pn = self.unfin[i]
                 pnums.append(pn)
             vals = self.action(pnums)
+#            secho(f"\npresigns.prepare: {pnums} ({len(self.list)}/{self.maxlen})")
             for pn in vals:
                 self.list[pn] = vals[pn]
             self.idx = groupmax
             # logger.debug(f" feeding list by {','.join(map(str,pnums))} idx={self.idx}")
 
-    def check(self, cnt=1):
-        if len(self.list) < cnt:
-            self.prepare()
+    def supply(self, cnt=0, min=0):
+        if min==0: min=self.grouplen
+        if len(self.list) < min:
+            self.prepare(cnt)
 
     def iter(self):
         return(self.list)

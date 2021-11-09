@@ -7,7 +7,7 @@
 
 """ OARepo S3 client lib. """
 
-import hashlib, re
+import hashlib, re, socket
 from os import path
 import time, requests, json, logging
 from urllib3.exceptions import NewConnectionError
@@ -68,7 +68,7 @@ class OARepoS3Client(object):
             if self.results[partNum-1] is None:
                 self.parts_unfin.append(partNum)
         logger.debug(f"{funcname()} parts_unfin:\n{self.parts_unfin}")
-        self.presigns = SharedList(self.presign_parts_upload, self.parts_unfin, MAX_PRESIGNS)
+        self.presigns = SharedList(self.presign_parts_upload, self.parts_unfin, BATCH_PRESIGNS, MAX_PRESIGNS)
         # ###
         # secho(f"parts_unfin:{self.parts_unfin}", prefix='DBG', fg='red')
         # secho(f"parts_unfin.join:{'#'.join(map(str,self.parts_unfin))}", prefix='DBG', fg='red')
@@ -76,7 +76,7 @@ class OARepoS3Client(object):
             # parts_unfin = range(1, self.num_parts + 1)
             st = STATUS_OK
             if len(self.parts_unfin) > 0:
-                self.idle_callback()
+                self.idle_callback(MAX_PRESIGNS)
                 self.parallels = Parallels(
                     self.upload_part, self.idle_callback,
                     self.num_parts, self.parts_unfin, parallel=self.parallel, quiet=self.quiet
@@ -109,7 +109,7 @@ class OARepoS3Client(object):
             fut_rem = pool.apply_async(get_remote_hash, args=(self.token, urlFile, self.part_size,))
             pool.close()
         else:
-            logger.debug(f"using ETag as remote checksum: {self.checksum}")
+            secho(f"using ETag as remote checksum: {self.checksum}")
 
         local_hash = get_local_hash(self.file, self.part_size)
         logger.debug(f"\n local checksum: {local_hash}")
@@ -206,6 +206,7 @@ class OARepoS3Client(object):
     def presign_parts_upload(self, partNums):
         pnstr = ",".join(map(str, partNums))
         presign_url = f"{self.urlUpload}/{pnstr}/presigned"
+        # secho(f"{funcname()} {pnstr}")
         logger.debug(f"{funcname()} presign_parts_upload (url:{presign_url})")
         try:
             resp = requests.get(presign_url, verify=self.https_verify)
@@ -305,11 +306,12 @@ class OARepoS3Client(object):
         offset = (partNum-1) * self.part_size
         part_size = self.part_size if partNum < self.num_parts else self.last_size
         if not self.presigns.has_key(partNum):
-            logger.debug(f"\n #{partNum} NOT in list: {partNum}")
-            part_s3_url = self.presign_parts_upload([partNum])[partNum]
-        else:
-            logger.debug(f"\n #{partNum} using {partNum} presign from cache")
-            part_s3_url = self.presigns.pop(partNum)
+            secho(f"\n #{partNum} NOT in list: {partNum}")
+            # part_s3_url = self.presign_parts_upload([partNum])[partNum]
+            time.sleep(SLOWDOWN_SLEEP)
+        # else:
+        #    logger.debug(f"\n #{partNum} using {partNum} presign from cache")
+        part_s3_url = self.presigns.pop(partNum)
         ok = False
         # raise Exception('EXCEPTION')
         for retry in range(1, MAX_RETRIES + 1):
@@ -362,8 +364,8 @@ class OARepoS3Client(object):
         else:
             raise Exception(f"Part {partNum} upload failed.", STATUS_ERR_MAX_RETRIES)
 
-    def idle_callback(self):
-        self.presigns.check(MAX_PARALLEL)
+    def idle_callback(self, cnt=MAX_PRESIGNS):
+        self.presigns.supply(cnt, cnt)
 
     def logTest(self):
         logger.debug(f"debug")
