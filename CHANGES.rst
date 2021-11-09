@@ -40,3 +40,10 @@ Version 0.1.7
 
 Version 0.1.8
  - check cmd paralelized
+
+Version 0.1.9
+ - nocheck flag impl.
+ - etag multipart checksums supp.
+ - presign req. grouping impl.
+ - presign req. divided into batches
+
