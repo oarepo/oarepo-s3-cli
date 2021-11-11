@@ -47,3 +47,5 @@ Version 0.1.9
  - presign req. grouping impl.
  - presign req. divided into batches
 
+Version 0.1.10
+ - changed chunk_size calculation + max_parts 10240
