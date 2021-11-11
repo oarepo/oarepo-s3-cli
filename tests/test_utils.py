@@ -25,9 +25,13 @@ def test_get_file_chunk_size():
     assert get_file_chunk_size(MIB_5*MAX_PARTS) == (MAX_PARTS, MIB_5, MIB_5)
     assert get_file_chunk_size(MIB_5*MAX_PARTS+1) == (MAX_PARTS/5+1, MIB_5*5, 1)
     assert get_file_chunk_size(MIB_5*MAX_PARTS*2) == (MAX_PARTS*2/5, MIB_5*5, MIB_5*5)
+    assert get_file_chunk_size(MIB_5*5*MAX_PARTS-1) == (MAX_PARTS, MIB_5*5, MIB_5*5-1)
     assert get_file_chunk_size(MIB_5*5*MAX_PARTS) == (MAX_PARTS, MIB_5*5, MIB_5*5)
+    assert get_file_chunk_size(MIB_5*5*MAX_PARTS+1) == (MAX_PARTS//10+1, MIB_5*50, 1)
+    assert get_file_chunk_size(MIB_5*5*MAX_PARTS+2) == (MAX_PARTS//10+1, MIB_5*50, 2)
+    assert get_file_chunk_size(MIB_5*50*MAX_PARTS) == (MAX_PARTS, MIB_5*50, MIB_5*50)
     with pytest.raises(Exception):
-        get_file_chunk_size(MIB_5*5*MAX_PARTS+1)
+        get_file_chunk_size(MIB_5*50*MAX_PARTS+1)
 
 def test_size_fmt():
     assert size_fmt(999) == '999 B'

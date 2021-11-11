@@ -25,6 +25,8 @@ def get_file_chunk_size(file_size):
         return 1, file_size, file_size
     elif file_size <= MAX_PARTS * MIN_PART_SIZE:
         return getnumchunks(file_size, MIN_PART_SIZE)
+    elif file_size <= MAX_PARTS * MID_PART_SIZE:
+        return getnumchunks(file_size, MID_PART_SIZE)
     elif file_size <= MAX_PARTS * MAX_PART_SIZE:
         return getnumchunks(file_size, MAX_PART_SIZE)
     else:
