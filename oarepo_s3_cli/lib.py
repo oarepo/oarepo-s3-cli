@@ -76,9 +76,9 @@ class OARepoS3Client(object):
             # parts_unfin = range(1, self.num_parts + 1)
             st = STATUS_OK
             if len(self.parts_unfin) > 0:
-                self.idle_callback(MAX_PRESIGNS)
+                self.presings_supply(MAX_PRESIGNS)
                 self.parallels = Parallels(
-                    self.upload_part, self.idle_callback,
+                    self.upload_part, self.presings_supply,
                     self.num_parts, self.parts_unfin, parallel=self.parallel, quiet=self.quiet
                 )
                 st, newparts = self.parallels.main()
@@ -105,12 +105,14 @@ class OARepoS3Client(object):
         secho(f"{msg}", quiet=self.quiet)
         urlFile = f"{self.urlFiles}{self.key}"
         if self.checksum is None:
+            secho("downloading remote file ...", quiet=self.quiet)
             pool = mp.Pool(1)
             fut_rem = pool.apply_async(get_remote_hash, args=(self.token, urlFile, self.part_size,))
             pool.close()
         else:
-            secho(f"using ETag as remote checksum: {self.checksum}")
+            secho(f"using ETag as remote checksum: {self.checksum}", quiet=self.quiet)
 
+        secho("calculating local checksum ...", quiet=self.quiet)
         local_hash = get_local_hash(self.file, self.part_size)
         logger.debug(f"\n local checksum: {local_hash}")
         # return True, STATUS_OK
@@ -252,15 +254,13 @@ class OARepoS3Client(object):
         secho('Completing upload ...', quiet=self.quiet)
         resp = requests.post(complete_url, data=parts4complete_json, headers=headers, verify=self.https_verify)
         logger.debug(f"{funcname()} status: {resp.status_code}")
-        # logger.debug(f"{funcname()} resp.text: {resp.text}")
-        # secho(f"{funcname()} resp.text: {resp.text}")
         if resp.status_code >= 400:
             raise Exception(f"Upload completing failed (http code {resp.status_code})", STATUS_WRONG_SERVER_RESPONSE)
         rjson = resp.json()
         location = rjson['location']
         self.checksum = rjson['checksum'] if 'checksum' in rjson.keys() else None
         logger.debug(f"Storage checksum={self.checksum}")
-        if self.checksum is not None: self.checksum = self.checksum.lstrip('etag:')
+        if self.checksum is not None: self.checksum = re.sub("^etag:", '', self.checksum)
         logger.debug(f"{funcname()} location: {location}")
         secho(f'Upload completed. ({location})', prefix='OK', quiet=self.quiet)
         return location
@@ -306,7 +306,7 @@ class OARepoS3Client(object):
         offset = (partNum-1) * self.part_size
         part_size = self.part_size if partNum < self.num_parts else self.last_size
         if not self.presigns.has_key(partNum):
-            secho(f"\n #{partNum} NOT in list: {partNum}")
+            secho(f"\n #{partNum} NOT in list of presigned parts - slowing down")
             # part_s3_url = self.presign_parts_upload([partNum])[partNum]
             time.sleep(SLOWDOWN_SLEEP)
         # else:
@@ -364,7 +364,7 @@ class OARepoS3Client(object):
         else:
             raise Exception(f"Part {partNum} upload failed.", STATUS_ERR_MAX_RETRIES)
 
-    def idle_callback(self, cnt=MAX_PRESIGNS):
+    def presings_supply(self, cnt=MAX_PRESIGNS):
         self.presigns.supply(cnt, cnt)
 
     def logTest(self):

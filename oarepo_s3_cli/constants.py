@@ -20,6 +20,7 @@ MAX_PRESIGNS = 400
 
 CYCLE_SLEEP = 1    # progress bar refresh interval
 RETRY_SLEEP = 2    # sleep(RETRY_SLEEP * retry)
+PRESIGN_REQ_SLEEP =1
 SLOWDOWN_SLEEP = 4
 MON_TIMEOUT = 300
 WORKER_TIMEOUT = 60

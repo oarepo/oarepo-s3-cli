@@ -26,6 +26,9 @@ class Parallels():
         self.killed = False
         self.pn = None
         self.quiet = quiet
+        self.stats = Stats(self.num_parts, self.num_parts-len(self.parts_unfin))
+        self.spinner = Spinner()
+        self.start = 0
 
     def signal_handler(self, signumber, stack_frame):
         signame = get_signame(signumber)
@@ -43,18 +46,24 @@ class Parallels():
             raise SignalException(self.pn, (f'Signal "{signame}"({signumber})', signumber))
             # raise SignalException(self.pn, f'Signal "{signame}"({signumber})')
 
-    def output(self, stats, spinchar, elapsed, timer=0, barchar='#'):
+    def output(self, signumber=0, stack_frame=None):
+        elapsed = round(time.time() - self.start)
+        timer = round(time.time() - self.stats.ts)
+        barchar = '#'
+        spinchar = self.spinner.get()
         elapsed_f = str(timedelta(seconds=elapsed))
-        fin_perc = stats.finished * 100 / self.num_parts
-        fin_bar = round(stats.finished * BAR_LENGTH / self.num_parts)
+        fin_perc = self.stats.finished * 100 / self.num_parts
+        fin_bar = round(self.stats.finished * BAR_LENGTH / self.num_parts)
         bar = f"{barchar * fin_bar}{spinchar if fin_bar < BAR_LENGTH else ''}{' ' * (BAR_LENGTH - fin_bar - 1)}"
         w = len(str(self.num_parts))
-        term4 = f"terminating:{stats.for_terminate}" if stats.for_terminate>0 else ''
+        term4 = f"terminating:{self.stats.for_terminate}" if self.stats.for_terminate>0 else ''
         timer_f = "%6s" % (f"({timer}s)",) if timer>0 else ''
-        vals = (elapsed_f, fin_perc, bar, stats.pending, stats.running, stats.finished, stats.failed, term4, timer_f)
+        vals = (elapsed_f, fin_perc, bar, self.stats.pending, self.stats.running,
+                self.stats.finished, self.stats.failed, term4, timer_f)
         msg = f"%s %3d%% [%s] pending:%-{w}d; started:%-{w}d; finished:%-{w}d; failed:%-{w}d %s %s" % vals
         secho(f"\r %-100s." % (msg,), nl=False, quiet=self.quiet)
         sys.stdout.flush()
+        if self.stats.remaining>0: signal.alarm(CYCLE_SLEEP)
 
 
     def worker_wrapper(self, pn, val):
@@ -78,14 +87,13 @@ class Parallels():
         return pn, res
 
     def main(self):
-        stats = Stats(self.num_parts, self.num_parts-len(self.parts_unfin))
         futs = [None for i in range(self.num_parts)]
         results = [None for i in range(self.num_parts)]
         # --- handlers: ---
         def ok_cb(res):
             logger.debug(f'\nCB:{procname()} {res}')
             results[res[0]-1] = res[1]
-            stats.finish()
+            self.stats.finish()
 
         def err_cb(res):
             logger.debug(f'\nERR CB:{procname()} {res}/{type(res)}')
@@ -93,12 +101,11 @@ class Parallels():
             if len(res.args) > 1:
                 pn, msg = res.args
                 results[pn - 1] = res
-            stats.fail()
+            self.stats.fail()
 
         # --- process pool init: ---
         logger.debug(f'Start main: {120*"="}')
-        spinner = Spinner()
-        start = time.time()
+        self.start = time.time()
         pool = None
         try:
             pool = mp.Pool(self.pool_size)
@@ -107,8 +114,8 @@ class Parallels():
                 futs[partNum-1] = pool.apply_async(
                     self.worker_wrapper, args=(partNum, f"val-{partNum}",),
                     callback=ok_cb, error_callback=err_cb)
-                # stats.start()
-            stats.start(self.pool_size)
+                # self.stats.start()
+            self.stats.start(self.pool_size)
         except Exception as e:
             logger.debug(f"\n{procname()}: Pool Exception: {e}")
         if pool is not None:
@@ -119,26 +126,30 @@ class Parallels():
             logger.debug(f"{procname()} no pool started.")
         signal.signal(signal.SIGINT, self.signal_handler)
         signal.signal(signal.SIGTERM, self.signal_handler)
+        signal.signal(signal.SIGALRM, self.output)
+        alrms = signal.alarm(CYCLE_SLEEP)
 
         # --- main cycle: ---
         try:
             while True:
-                secs = round(time.time() - start)
-                timer = round(time.time() - stats.ts)
-                self.output(stats, spinner.get(), secs, timer)
+                self.secs = round(time.time() - self.start)
+                self.timer = round(time.time() - self.stats.ts)
+
+                #self.output()
                 if self.killed:
                     pool.terminate()
                     break
-                if stats.remaining == 0: break
-                if timer > self.mon_timeout:
+                if self.stats.remaining == 0: break
+                if self.timer > self.mon_timeout:
                     logger.critical(f"\nMonitor timeout ({MON_TIMEOUT}s) reached")
                     secho(f"\nMonitor timeout ({MON_TIMEOUT}s) reached", prefix='\nERR', fg='red')
                     break
                 self.idle_callback()
-                time.sleep(CYCLE_SLEEP)
+                time.sleep(PRESIGN_REQ_SLEEP)
         except Exception as e:
             raise Exception(None, f'Main cycle Exception {e})')
-        reason = 'finished' if stats.remaining == 0 else 'interrupt' if self.killed else 'timeout?'
+        alrms = signal.alarm(0)
+        reason = 'finished' if self.stats.remaining == 0 else 'interrupt' if self.killed else 'timeout?'
         logger.debug(f"\n{'-' * 10} main cycle ended ({reason}) {'-' * 10}")
 
         # --- scan results from futures: ---
@@ -150,22 +161,22 @@ class Parallels():
             logger.debug(f'final waiting for fut {partNum}: ')
             try:
                 j, res = fut.get(FORCED_GET_TIMEOUT)
-                stats.finish()
+                self.stats.finish()
                 assert partNum == j
                 results[partNum-1] = res
                 logger.debug(f"OK: #{partNum} get: {res}({type(res) if isinstance(res, Exception) else ''})")
             except mp.context.TimeoutError as e:
                 logger.debug(f'\nERR: #{partNum} upload failed (e.args:{e.args})')
-                stats.terminate()
+                self.stats.terminate()
             except Exception as e:
                 logger.debug(f'\nERR: #{partNum} result is Exception {e} (e.args:{e.args})')
                 results[i] = e
-                # stats.fail()
-        self.output(stats, spinner.get(), secs)
+                # self.stats.fail()
+        self.output()
 
         logger.debug(f"\n{'-' * 3} scan cycle ended {'-' * 3}")
         try:
-            if stats.remaining > 0 or stats.for_terminate > 0:
+            if self.stats.remaining > 0 or self.stats.for_terminate > 0:
                 logger.debug(f"\nmain: terminating pool ...")
                 pool.terminate()
             logger.debug(f"\nmain: joining pool ...")
@@ -181,10 +192,10 @@ class Parallels():
             if isinstance(item, Exception):
                 item = f'Ex{item}({type(item)})'
             logger.debug(f'  {i+1}:{item} ')
-        st = STATUS_OK if stats.remaining == 0 and stats.failed == 0 else STATUS_UPLOAD_UNCOMPLETED
+        st = STATUS_OK if self.stats.remaining == 0 and self.stats.failed == 0 else STATUS_UPLOAD_UNCOMPLETED
         prefix = '\nOK' if st == STATUS_OK else '\nERR'
         fg = 'green' if st == STATUS_OK else 'red'
-        secho(f"remaining:{stats.remaining}, failed:{stats.failed}", prefix=prefix, fg=fg, quiet=self.quiet)
+        secho(f"remaining:{self.stats.remaining}, failed:{self.stats.failed}", prefix=prefix, fg=fg, quiet=self.quiet)
         logger.debug(f'\nmain: Done [{st}].')
         return (st, results)
 

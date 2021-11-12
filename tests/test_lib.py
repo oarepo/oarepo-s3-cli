@@ -152,7 +152,7 @@ def test_init_upload(mock_path_getsize, mock_path_isfile, mock_path_exists, mock
     )
     oas3.quiet = False
     oas3.presigns = SharedList(oas3.presign_parts_upload, [1], BATCH_PRESIGNS, MAX_PRESIGNS)
-    oas3.idle_callback(1)
+    oas3.presings_supply(1)
     resp = oas3.upload_part(1, 'val')
     assert resp['PartNumber'] == 1
     assert resp['status'] == STATUS_OK
